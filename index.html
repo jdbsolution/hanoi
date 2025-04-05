@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tower of Hanoi Animation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for better appearance */
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f0f4f8; /* Light blue-gray background */
+        }
+        canvas {
+            background-color: #ffffff; /* White canvas background */
+            display: block;
+            margin: 20px auto;
+            border-radius: 8px; /* Rounded corners for the canvas */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+        }
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem; /* Space between controls */
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        label {
+            font-weight: 500;
+            color: #374151; /* Gray-700 */
+        }
+        select, button {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid #d1d5db; /* Gray-300 */
+            font-size: 0.875rem; /* text-sm */
+            transition: all 0.2s ease-in-out;
+        }
+        select {
+            background-color: #f9fafb; /* Gray-50 */
+        }
+        button {
+            background-color: #3b82f6; /* Blue-500 */
+            color: white;
+            font-weight: 600; /* Semibold */
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #2563eb; /* Blue-600 */
+        }
+        button:disabled {
+            background-color: #9ca3af; /* Gray-400 */
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 1rem;
+            font-size: 0.875rem;
+            color: #4b5563; /* Gray-600 */
+            min-height: 1.25rem; /* Ensure space even when empty */
+        }
+        .disk {
+            border-radius: 4px; /* Slightly rounded disks */
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1); /* Subtle shadow on disks */
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <h1 class="text-2xl font-bold text-gray-800 mb-4">Tower of Hanoi</h1>
+
+    <div class="controls">
+        <label for="disk-count">Number of Disks:</label>
+        <select id="disk-count" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5" selected>5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+        </select>
+        <button id="start-button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow">
+            Start Animation
+        </button>
+    </div>
+
+    <div id="status" class="text-gray-600">Select disks and press Start.</div>
+
+    <canvas id="hanoi-canvas" width="600" height="300"></canvas>
+
+    <script>
+        // --- Canvas and Context Setup ---
+        const canvas = document.getElementById('hanoi-canvas');
+        const ctx = canvas.getContext('2d');
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+
+        // --- DOM Elements ---
+        const diskSelect = document.getElementById('disk-count');
+        const startButton = document.getElementById('start-button');
+        const statusDiv = document.getElementById('status');
+
+        // --- Game State Variables ---
+        let numDisks = 5; // Default number of disks
+        let towers = [[], [], []]; // Array representing the three towers and disks on them
+        let moves = []; // Array to store the sequence of moves
+        let currentMoveIndex = 0;
+        let animationInterval = null;
+        let animationSpeed = 500; // Milliseconds between moves (adjust for faster/slower)
+        let isAnimating = false;
+
+        // --- Disk Properties ---
+        const diskHeight = 20;
+        const minDiskWidth = 40;
+        const diskWidthIncrement = 20;
+        const towerBottomY = canvasHeight - 30;
+        const towerTopY = 50;
+        const towerHeight = towerBottomY - towerTopY;
+        const towerWidth = 10;
+        const towerSpacing = canvasWidth / 4;
+        const towerX = [towerSpacing, towerSpacing * 2, towerSpacing * 3];
+
+        // --- Colors ---
+        const towerColor = '#6b7280'; // Gray-500
+        const diskColors = [
+            '#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#0ea5e9',
+            '#6366f1', '#a855f7', '#ec4899' // A selection of Tailwind colors
+        ];
+
+        // --- Drawing Functions ---
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+        }
+
+        function drawTowers() {
+            ctx.fillStyle = towerColor;
+            ctx.strokeStyle = towerColor; // Use same color for base line
+            ctx.lineWidth = 2;
+
+            // Draw base line
+            ctx.beginPath();
+            ctx.moveTo(towerSpacing / 2, towerBottomY);
+            ctx.lineTo(canvasWidth - towerSpacing / 2, towerBottomY);
+            ctx.stroke();
+
+
+            // Draw vertical tower rods
+            towerX.forEach(x => {
+                // Center the rod visually
+                const rodX = x - towerWidth / 2;
+                ctx.fillRect(rodX, towerTopY, towerWidth, towerHeight);
+            });
+        }
+
+        function drawDisk(x, y, width, height, color) {
+            ctx.fillStyle = color;
+            // Apply styles similar to the .disk class
+            ctx.shadowColor = 'rgba(0,0,0,0.1)';
+            ctx.shadowBlur = 2;
+            ctx.shadowOffsetY = 1;
+
+            // Draw the rectangle (disk)
+            ctx.fillRect(x - width / 2, y - height, width, height);
+
+            // Reset shadow for other drawings
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetY = 0;
+
+             // Add a subtle border/highlight for definition
+            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x - width / 2, y - height, width, height);
+        }
+
+        function drawDisks() {
+            towers.forEach((tower, towerIndex) => {
+                const baseX = towerX[towerIndex];
+                tower.forEach((diskSize, diskIndex) => {
+                    const diskWidth = minDiskWidth + (diskSize - 1) * diskWidthIncrement;
+                    const diskY = towerBottomY - (diskIndex * diskHeight);
+                    const colorIndex = diskSize - 1; // Use disk size (1-based) to pick color
+                    const color = diskColors[colorIndex % diskColors.length]; // Cycle through colors if more disks than colors
+                    drawDisk(baseX, diskY, diskWidth, diskHeight, color);
+                });
+            });
+        }
+
+        function drawScene() {
+            clearCanvas();
+            drawTowers();
+            drawDisks();
+        }
+
+        // --- Tower of Hanoi Algorithm ---
+
+        // Generates the list of moves needed to solve the puzzle
+        function hanoi(n, source, destination, auxiliary) {
+            if (n > 0) {
+                // Move n-1 disks from source to auxiliary, using destination as auxiliary
+                hanoi(n - 1, source, auxiliary, destination);
+
+                // Move the nth disk from source to destination
+                moves.push({ disk: n, from: source, to: destination });
+
+                // Move the n-1 disks from auxiliary to destination, using source as auxiliary
+                hanoi(n - 1, auxiliary, destination, source);
+            }
+        }
+
+        // --- Animation Logic ---
+
+        function animateMove() {
+            if (currentMoveIndex >= moves.length) {
+                stopAnimation();
+                statusDiv.textContent = `Solved in ${moves.length} moves!`;
+                return;
+            }
+
+            const move = moves[currentMoveIndex];
+            const sourceTower = towers[move.from];
+            const destTower = towers[move.to];
+
+            // Find the disk to move (it should be the last one on the source tower)
+            // Note: The hanoi function generates moves based on disk *size* (n),
+            // but our towers array stores the actual disk sizes. We need to ensure
+            // the top disk matches the expected size for the move.
+            if (sourceTower.length > 0) {
+                 const diskToMove = sourceTower.pop(); // Remove disk from source
+
+                 // Basic validation (optional but good practice)
+                 if (diskToMove !== move.disk && moves.length < 100) { // Avoid spamming console for large N
+                    console.warn(`Move ${currentMoveIndex+1}: Expected to move disk ${move.disk}, but found ${diskToMove} on tower ${move.from}. State:`, JSON.stringify(towers));
+                    // Attempt to recover or stop, here we just proceed but log warning.
+                 }
+
+                 destTower.push(diskToMove); // Add disk to destination
+            } else {
+                 console.error(`Move ${currentMoveIndex+1}: Source tower ${move.from} is empty! Cannot move disk ${move.disk}. State:`, JSON.stringify(towers));
+                 stopAnimation();
+                 statusDiv.textContent = "Animation error: Source tower empty.";
+                 return;
+            }
+
+
+            // Update status
+            statusDiv.textContent = `Move ${currentMoveIndex + 1}/${moves.length}: Move disk ${move.disk} from Tower ${move.from + 1} to Tower ${move.to + 1}`;
+
+            // Redraw the scene with the updated state
+            drawScene();
+
+            currentMoveIndex++;
+
+            // Schedule the next move
+            animationInterval = setTimeout(animateMove, animationSpeed);
+        }
+
+        function startAnimation() {
+            if (isAnimating) return; // Prevent multiple starts
+
+            numDisks = parseInt(diskSelect.value);
+            if (isNaN(numDisks) || numDisks < 1) {
+                statusDiv.textContent = "Invalid number of disks.";
+                return;
+            }
+
+            // Reset state
+            towers = [[], [], []];
+            moves = [];
+            currentMoveIndex = 0;
+            isAnimating = true;
+            startButton.disabled = true;
+            diskSelect.disabled = true;
+            statusDiv.textContent = "Starting animation...";
+
+            // Initialize the source tower (tower 0) with disks
+            for (let i = numDisks; i >= 1; i--) {
+                towers[0].push(i); // Push largest disk first (size n), then n-1, ..., 1
+            }
+
+            // Generate the moves
+            hanoi(numDisks, 0, 2, 1); // Move n disks from tower 0 to tower 2, using tower 1 as auxiliary
+
+            // Initial draw
+            drawScene();
+
+            // Start the animation loop
+            animationInterval = setTimeout(animateMove, animationSpeed); // Start after a short delay
+        }
+
+        function stopAnimation() {
+            clearTimeout(animationInterval);
+            animationInterval = null;
+            isAnimating = false;
+            startButton.disabled = false;
+            diskSelect.disabled = false;
+            // Don't clear status on stop, it might show the final count or an error
+        }
+
+        // --- Event Listeners ---
+        startButton.addEventListener('click', startAnimation);
+
+        // --- Initial Setup ---
+        function initialize() {
+            numDisks = parseInt(diskSelect.value);
+             // Reset state visually
+            towers = [[], [], []];
+            for (let i = numDisks; i >= 1; i--) {
+                towers[0].push(i);
+            }
+            moves = [];
+            currentMoveIndex = 0;
+            statusDiv.textContent = "Select disks and press Start.";
+            stopAnimation(); // Ensure any previous animation is stopped
+            drawScene(); // Draw initial state
+        }
+
+        diskSelect.addEventListener('change', initialize); // Reset when changing disk count
+
+        // Initial draw when the page loads
+        window.onload = initialize;
+
+    </script>
+
+</body>
+</html>
